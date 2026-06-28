@@ -325,14 +325,22 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
     LDA #$02
     STA OAMDMA
 
-    ; Apply scroll
-    LDA PPUSTAT         ; Reset latch
-    LDA #%10001000      ; NMI on, BG=$1000, Spr=$0000
-    STA PPUCTRL
-    LDA scroll_y
-    STA PPUSCROLL
+    ; Score HUD update (during vblank, safe to write VRAM)
+    LDA score_dirty
+    BEQ @no_score_upd
+    JSR update_score_hud
     LDA #0
-    STA PPUSCROLL
+    STA score_dirty
+@no_score_upd:
+
+    ; Apply scroll (MUST follow any PPUADDR writes)
+    BIT PPUSTAT         ; Reset address latch
+    LDA #0
+    STA PPUSCROLL       ; X scroll = 0
+    LDA scroll_y
+    STA PPUSCROLL       ; Y scroll = scroll_y
+    LDA #%10001000      ; NMI enable, sprites from $1000, BG from $0000
+    STA PPUCTRL
 
     ; Run music engine
     JSR music_tick
@@ -486,6 +494,9 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
 ; LOAD TITLE NAMETABLE
 ; ============================================================
 .proc load_title_nt
+    ; Disable rendering so VRAM writes are safe at any time
+    LDA #0
+    STA PPUMASK
     ; Clear nametable 0
     LDA PPUSTAT
     LDA #$20
@@ -582,6 +593,16 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
     ; Place some star tiles for title background
     JSR scatter_stars_title
 
+    ; Restore PPU state and re-enable rendering
+    BIT PPUSTAT
+    LDA #0
+    STA PPUSCROLL
+    STA PPUSCROLL
+    LDA #%10001000
+    STA PPUCTRL
+    LDA #%00011110
+    STA PPUMASK
+
     RTS
 .endproc
 
@@ -614,6 +635,8 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
 ; LOAD GAME NAMETABLE (background for play)
 ; ============================================================
 .proc load_game_nt
+    LDA #0
+    STA PPUMASK         ; Disable rendering for safe VRAM access
     ; Clear nametable 0
     LDA PPUSTAT
     LDA #$20
@@ -650,17 +673,17 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
     STA PPUADDR
     LDA #$01
     STA PPUADDR
-    LDA #$1C            ; 'S'
+    LDA #$2C            ; 'S'
     STA PPUDATA
-    LDA #$13            ; 'C'
+    LDA #$1C            ; 'C'
     STA PPUDATA
-    LDA #$18            ; 'O'
+    LDA #$28            ; 'O'
     STA PPUDATA
-    LDA #$1B            ; 'R'
+    LDA #$2B            ; 'R'
     STA PPUDATA
-    LDA #$0E            ; 'E'
+    LDA #$1E            ; 'E'
     STA PPUDATA
-    LDA #$26            ; ':'
+    LDA #$35            ; ':'
     STA PPUDATA
 
     ; WAVE label at row 0, col 15
@@ -669,13 +692,13 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
     STA PPUADDR
     LDA #$0F
     STA PPUADDR
-    LDA #$1F            ; 'W'
+    LDA #$30            ; 'W'
     STA PPUDATA
-    LDA #$0A            ; 'A'
+    LDA #$1A            ; 'A'
     STA PPUDATA
-    LDA #$1D            ; 'V'
+    LDA #$2F            ; 'V'
     STA PPUDATA
-    LDA #$0E            ; 'E'
+    LDA #$1E            ; 'E'
     STA PPUDATA
 
     ; LIVES label at row 0, col 21
@@ -684,15 +707,15 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
     STA PPUADDR
     LDA #$15
     STA PPUADDR
-    LDA #$15            ; 'L'
+    LDA #$25            ; 'L'
     STA PPUDATA
-    LDA #$12            ; 'I'
+    LDA #$22            ; 'I'
     STA PPUDATA
-    LDA #$1D            ; 'V'
+    LDA #$2F            ; 'V'
     STA PPUDATA
-    LDA #$0E            ; 'E'
+    LDA #$1E            ; 'E'
     STA PPUDATA
-    LDA #$1C            ; 'S'
+    LDA #$2C            ; 'S'
     STA PPUDATA
 
     ; Place background stars in play area
@@ -713,6 +736,16 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
     STA PPUDATA
     DEX
     BNE @attr_hud
+
+    ; Restore PPU state and re-enable rendering
+    BIT PPUSTAT
+    LDA #0
+    STA PPUSCROLL
+    STA PPUSCROLL
+    LDA #%10001000
+    STA PPUCTRL
+    LDA #%00011110
+    STA PPUMASK
 
     RTS
 .endproc
@@ -845,8 +878,9 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
     ; Load game background
     JSR load_game_nt
 
-    ; Update score display
-    JSR update_score_hud
+    ; Request score HUD update (NMI will write during next vblank)
+    LDA #1
+    STA score_dirty
 
     ; Start gameplay music (track 1)
     LDA #1
@@ -918,14 +952,6 @@ SPR_HUD0   = $1B    ; Sprite-0 trigger (HUD line)
 
     ; Render everything
     JSR render_play
-
-    ; Update HUD if score changed
-    LDA score_dirty
-    BEQ @no_hud
-    JSR update_score_hud
-    LDA #0
-    STA score_dirty
-@no_hud:
 
     RTS
 .endproc
@@ -3267,21 +3293,29 @@ circle_vx:
 ;                $34=' ' (space)
 ;                $35=':' $36='!' $37='.'
 
-; "VOID RUNNER" in tile indices
+; Tile map: A=$1A B=$1B C=$1C D=$1D E=$1E F=$1F G=$20 H=$21 I=$22 J=$23
+;           K=$24 L=$25 M=$26 N=$27 O=$28 P=$29 Q=$2A R=$2B S=$2C T=$2D
+;           U=$2E V=$2F W=$30 X=$31 Y=$32 Z=$33 space=$34 :=$35
+;           0=$10 1=$11 ... 9=$19
+
+; "VOID RUNNER"
 title_str:
-    .byte $1F,$18,$12,$17,$34,$1B,$1E,$17,$17,$0E,$1B   ; V O I D _ R U N N E R
+    .byte $2F,$28,$22,$1D,$34,$2B,$2E,$27,$27,$1E,$2B   ; V O I D _ R U N N E R
     .byte 0
 
+; "PRESS START"
 press_str:
-    .byte $19,$1B,$0E,$1C,$1C,$34,$1C,$23,$0A,$1B,$23   ; P R E S S _ S T A R T
+    .byte $29,$2B,$1E,$2C,$2C,$34,$2C,$2D,$1A,$2B,$2D   ; P R E S S _ S T A R T
     .byte 0
 
+; "A:FIRE  B:BOMB"
 ctrl_str:
-    .byte $0A,$35,$16,$12,$1B,$0E,$34,$34,$0B,$35,$0B,$18,$13,$0B   ; A:FIRE  B:BOMB
+    .byte $1A,$35,$1F,$22,$2B,$1E,$34,$34,$1B,$35,$1B,$28,$26,$1B   ; A:FIRE  B:BOMB
     .byte 0
 
+; "BY CLAUDE"
 by_str:
-    .byte $0B,$34,$13,$15,$0A,$1E,$17,$0E   ; B CLAUDE (space before)
+    .byte $1B,$32,$34,$1C,$25,$1A,$2E,$1D,$1E   ; B Y _ C L A U D E
     .byte 0
 
 ; ============================================================
