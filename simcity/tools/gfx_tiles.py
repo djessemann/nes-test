@@ -923,14 +923,47 @@ def build(BG, SPR, cells):
     cells.add_block('SEAPORT', compose_block(SEAPORT_LAYOUT), P_GRAY)
     cells.add_block('AIRPORT', compose_block(AIRPORT_LAYOUT), P_GRAY)
 
-    # ---------------- UI tiles
-    BG.add('1'*8 + ('\n'+'1'*8)*7, 'SOLID')
+    # ---------------- UI tiles (SOLID comes from the font builder)
     for lvl in range(1, 9):
         rows = []
         for y in range(8):
             fill = (7 - y) < lvl
             rows.append('1' + ('3'*6 if fill else '1'*6) + '1')
         BG.add('\n'.join(rows), f'BAR{lvl}')
+
+    # ---------------- zone growth layout tables (asm data)
+    def zone_table(tname, sign, edges_prefix, blocks_name, stages):
+        vals = []
+        for lvl in range(3):
+            stage = stages.get(lvl, {})
+            for pos in range(9):
+                if pos == 4:
+                    vals.append(cells.names[sign])
+                elif pos in stage:
+                    vals.append(cells.names[stage[pos]])
+                else:
+                    vals.append(cells.names[f'{edges_prefix}_{pos}'])
+        vals.extend(cells.blocks[blocks_name])       # level 3 = full block
+        lines = [f'zgfx_{tname}:']
+        for i in range(0, 36, 12):
+            lines.append('.byte ' + ','.join(f'${v:02X}' for v in vals[i:i+12]))
+        return lines
+
+    extra += zone_table('r', 'SIGN_R', 'ZR', 'RES3', {
+        1: {0: 'HOUSE_A', 5: 'HOUSE_B'},
+        2: {0: 'HOUSE_B', 1: 'HOUSE_A', 2: 'HOUSE_C', 3: 'HOUSE_C',
+            5: 'HOUSE_A', 6: 'HOUSE_A', 7: 'HOUSE_C', 8: 'HOUSE_B'},
+    })
+    extra += zone_table('c', 'SIGN_C', 'ZC', 'COM3', {
+        1: {3: 'SHOP_A', 8: 'SHOP_B'},
+        2: {0: 'SHOP_A', 1: 'SHOP_B', 3: 'SHOP_B',
+            5: 'SHOP_A', 7: 'SHOP_B', 8: 'SHOP_A'},
+    })
+    extra += zone_table('i', 'SIGN_I', 'ZI', 'IND3', {
+        1: {1: 'FACTORY_A', 6: 'FACTORY_B'},
+        2: {0: 'FACTORY_B', 2: 'FACTORY_A', 3: 'FACTORY_A',
+            5: 'FACTORY_B', 7: 'FACTORY_A'},
+    })
 
     # ---------------- sprites
     SPR.add(CURSOR_CORNER, 'CURSOR')

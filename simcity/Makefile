@@ -2,7 +2,7 @@ NAME = micropolis
 
 all: $(NAME).nes
 
-chr.bin: tools/gfx.py
+chr.bin: tools/gfx.py tools/gfx_tiles.py
 	python3 tools/gfx.py chr.bin
 
 $(NAME).o: src/*.asm chr.bin

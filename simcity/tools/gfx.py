@@ -541,11 +541,16 @@ FONT_ORDER = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ$.,-:/%!?'()"
 
 def build_font():
     idx = 1
-    mapping = {' ': 0}
+    mapping = {}
     for ch in FONT_ORDER:
-        BG.put(idx, FONT[ch])
+        # glyphs get a solid color-1 background (black in the gray palette)
+        art = FONT[ch].replace('.', '1')
+        BG.put(idx, art)
         mapping[ch] = idx
         idx += 1
+    # space = solid color-1 tile; also exported as T_SOLID
+    BG.put(idx, '1'*8 + ('\n'+'1'*8)*7, 'SOLID')
+    mapping[' '] = idx
     return mapping
 
 FONT_MAP = build_font()
