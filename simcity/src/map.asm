@@ -294,8 +294,10 @@ cell_gfx:
     jmp @have
 
 ; zone_center_aux: for zone cell (cell_x,cell_y) with pos in t6,
-; returns A = level (aux & $0F of the center cell). Preserves cell_x/y.
-zone_level_save: .byte 0
+; returns A = level (aux & 3 of the center cell). Preserves cell_x/y.
+.segment "BSS"
+zone_level_save: .res 1
+.segment "CODE"
 zone_center_aux:
     lda cell_x
     pha
@@ -312,12 +314,13 @@ zone_center_aux:
     sta cell_y
     jsr cell_ptr
     lda (ptr1),y
-    and #$0F
+    and #$03
     sta zone_level_save
     pla
     sta cell_y
     pla
     sta cell_x
+    lda zone_level_save
     rts
 zone_level_a:
     lda zone_level_save
@@ -693,10 +696,11 @@ queue_cell:
     cmp #VIEW_H
     bcs @out
     sta tmp_row
-    ; room? 19 bytes
+    ; room? 19 bytes; if not, defer to the pending list
     lda #19
     jsr vq_room
     bcs :+
+    jmp pend_push
 @out:
     rts
 :   jsr get_cell
@@ -842,6 +846,55 @@ queue_cell:
     sta vq,x
     inx
     jsr vq_end
+    rts
+
+; deferred cell redraws (vblank queue was full)
+pend_push:
+    ldx pend_tail
+    inx
+    txa
+    and #$0F
+    cmp pend_head
+    beq @full           ; drop (extremely unlikely; sim will redraw later)
+    ldx pend_tail
+    lda cell_x
+    sta pend_x,x
+    lda cell_y
+    sta pend_y,x
+    inx
+    txa
+    and #$0F
+    sta pend_tail
+@full:
+    rts
+
+pend_drain:
+    lda pend_head
+    cmp pend_tail
+    beq @done
+    lda #19
+    jsr vq_room
+    bcc @done
+    lda cell_x
+    pha
+    lda cell_y
+    pha
+    ldx pend_head
+    lda pend_x,x
+    sta cell_x
+    lda pend_y,x
+    sta cell_y
+    inx
+    txa
+    and #$0F
+    sta pend_head
+    jsr queue_cell
+    pla
+    sta cell_y
+    pla
+    sta cell_x
+    jmp pend_drain
+@done:
     rts
 
 ; redraw cell and its 4 neighbors (for network connections)

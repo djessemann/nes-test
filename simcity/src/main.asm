@@ -134,7 +134,11 @@ vq_len:      .res 1     ; vblank queue byte length
 vq_ready:    .res 1
 tool_size:   .res 1     ; 1 or 3 cells
 cur_moved:   .res 1
-menu_page:  .res 1
+menu_page:   .res 1
+sim_p0:      .res 2     ; scan pointer into map0
+sim_p1:      .res 2     ; scan pointer into map1
+sim_cx:      .res 1     ; scan cell coords
+sim_cy:      .res 1
 
 DIRTY_MONEY = %00000001
 DIRTY_DATE  = %00000010
@@ -177,10 +181,29 @@ scan_pow:    .res 1
 scan_unp:    .res 1
 scan_plant:  .res 1
 scan_road:   .res 2
+scan_rail:   .res 2
 scan_fire:   .res 1     ; burning cells seen this pass
 scan_firestn: .res 1
 scan_police: .res 1
+scan_flags:  .res 1     ; bit0 stadium, bit1 seaport, bit2 airport (powered)
+scan_boltn:  .res 1
 sim_cycles:  .res 1     ; completed scan passes (month ticks)
+roads_n:     .res 2     ; latched stats
+rails_n:     .res 2
+police_n:    .res 1
+firestn_n:   .res 1
+has_flags:   .res 1
+grew_flag:   .res 1     ; a zone changed level this frame (throttle)
+pw_drop:     .res 1     ; BFS queue overflowed
+cost_tmp:    .res 6     ; scratch digits for money ops
+mul_a:       .res 2
+mul_r:       .res 2
+bolt_tx:     .res 8     ; bolt list being built this pass
+bolt_ty:     .res 8
+pend_x:      .res 16    ; cell redraws deferred when the queue was full
+pend_y:      .res 16
+pend_head:   .res 1
+pend_tail:   .res 1
 num_buf:     .res 8     ; text number scratch
 tmp_row:     .res 1
 tmp_col:     .res 1
@@ -193,7 +216,7 @@ new_city:    .res 1
 map0:        .res 3072  ; cell codes
 map1:        .res 3072  ; bit7 power, bit6 power scratch, bits0-3 zone level
 save_magic:  .res 4
-sv_money:    .res 3
+sv_money:    .res 6
 sv_month:    .res 1
 sv_year:     .res 2
 sv_tax:      .res 1
@@ -577,11 +600,12 @@ money_add:
 ; ptr2 = PPU addr (t0=hi, t1=lo). Returns carry clear if no room.
 ; Simple byte-level API used by helpers below.
 
-; vq_room: A = bytes needed incl header; carry set if room
+; vq_room: A = bytes needed incl header; carry set if room.
+; The cap keeps total NMI PPU writes within the vblank budget.
 vq_room:
     clc
     adc vq_len
-    cmp #172
+    cmp #100
     bcs @no
     sec
     rts

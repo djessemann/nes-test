@@ -446,6 +446,11 @@ city_new:
     sta sim_lo
     sta sim_hi
     sta sim_cycles
+    sta pw_head
+    sta pw_tail
+    sta pend_head
+    sta pend_tail
+    jsr scan_init
     sta msg_cur
     sta res_pop
     sta res_pop+1
@@ -475,25 +480,25 @@ city_save:
     sta save_magic+3
     ldx #5
 : lda money,x
-    sta sv_money,x      ; 6 digits: sv_money..+5 (overlaps sv_month etc)
+    sta sv_money,x
     dex
     bpl :-
     lda month
-    sta sv_year
+    sta sv_month
     lda year
-    sta sv_year+1
+    sta sv_year
     lda year+1
-    sta sv_tax
+    sta sv_year+1
     lda tax_rate
-    sta sv_vpx
+    sta sv_tax
     lda vp_x
-    sta sv_vpy
+    sta sv_vpx
     lda vp_y
-    sta sv_curx
+    sta sv_vpy
     lda cur_x
-    sta sv_cury
+    sta sv_curx
     lda cur_y
-    sta sv_speed
+    sta sv_cury
     lda disaster_on
     sta sv_disaster
     rts
@@ -504,21 +509,21 @@ city_load:
     sta money,x
     dex
     bpl :-
-    lda sv_year
+    lda sv_month
     sta month
-    lda sv_year+1
+    lda sv_year
     sta year
-    lda sv_tax
+    lda sv_year+1
     sta year+1
-    lda sv_vpx
+    lda sv_tax
     sta tax_rate
-    lda sv_vpy
+    lda sv_vpx
     sta vp_x
-    lda sv_curx
+    lda sv_vpy
     sta vp_y
-    lda sv_cury
+    lda sv_curx
     sta cur_x
-    lda sv_speed
+    lda sv_cury
     sta cur_y
     lda sv_disaster
     sta disaster_on
@@ -689,10 +694,13 @@ status_full_draw:
 
 nt_hi_tab: .byte $20,$24
 
-; per-frame status updates: handle one dirty flag per frame via queue
+; per-frame status updates: handle one dirty flag per frame via queue.
+; Only runs when the queue is empty so a full update always fits.
 status_update:
+    lda vq_len
+    bne @sdone
     lda dirty
-    beq @done
+    beq @sdone
     lsr a
     bcc :+
     jsr stat_money
@@ -729,12 +737,12 @@ status_update:
     sta dirty
     rts
 :   lsr a
-    bcc @done
+    bcc @sdone
     jsr stat_pop
     lda dirty
     and #<~DIRTY_POP
     sta dirty
-@done:
+@sdone:
     rts
 
 ; money: row 0 col 1: "$123456 " -> build in num_buf as tiles
@@ -1142,15 +1150,17 @@ calc_pop:
     lda t3
     adc ind_pop+1
     sta t3
-    ; *4
-    asl t2
+    ; x32 (each zone level represents ~32 citizens)
+    ldx #5
+: asl t2
     rol t3
-    asl t2
-    rol t3
+    dex
+    bne :-
     rts
 
 ; ---------------------------------------------------------------- play -----
 play_frame:
+    jsr pend_drain
     jsr cursor_move
     jsr play_buttons
     jsr sim_slice
