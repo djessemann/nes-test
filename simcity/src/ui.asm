@@ -1806,28 +1806,613 @@ build_oam_menu_hidden:
     jmp build_oam_menu_hidden_from4
 
 ; ---------------------------------------------------------------- pause ----
+; START opens the city report / budget screen (drawn into the back
+; nametable, then flipped in — same machinery as the build menu).
 pause_open:
+    lda draw_nt
+    eor #1
+    sta draw_target
+    lda #0
+    sta trans_row
+    sta menu_sel        ; 0=tax, 1=speed, 2=disasters
+    sta state_sub       ; 0=drawing, 1=interactive, 2=closing
     lda #ST_PAUSE
     sta game_state
-    lda #MSG_PAUSED
-    sta msg_cur
-    lda dirty
-    ora #DIRTY_MSG
-    sta dirty
+    jsr city_save
     rts
 
 pause_frame:
-    jsr status_update
+    lda state_sub
+    beq @drawing
+    cmp #1
+    beq @interact
+    ; closing
+    jsr queue_row_step
+    jmp build_oam_menu_hidden
+@drawing:
+    jsr pause_draw_step
+    jmp build_oam_menu_hidden
+@interact:
     lda joy_press
-    and #BTN_START
+    and #(BTN_START|BTN_B)
     beq :+
-    lda #ST_PLAY
-    sta game_state
-    lda #$FF
-    sta msg_cur
-    lda dirty
-    ora #DIRTY_MSG
-    sta dirty
-    jsr city_save
-:   jsr build_oam
+    ; close
+    lda draw_nt
+    eor #1
+    sta draw_target
+    lda #0
+    sta trans_row
+    lda #2
+    sta state_sub
     rts
+:   lda joy_press
+    and #BTN_UP
+    beq :+
+    lda menu_sel
+    beq :+
+    dec menu_sel
+:   lda joy_press
+    and #BTN_DOWN
+    beq :+
+    lda menu_sel
+    cmp #2
+    bcs :+
+    inc menu_sel
+:   lda joy_press
+    and #BTN_LEFT
+    beq :+
+    jsr pause_adjust_dn
+:   lda joy_press
+    and #BTN_RIGHT
+    beq :+
+    jsr pause_adjust_up
+:   jmp pause_oam
+
+pause_adjust_up:
+    lda menu_sel
+    beq @tax
+    cmp #1
+    beq @spd
+    lda #1
+    sta disaster_on
+    jmp pause_refresh
+@tax:
+    lda tax_rate
+    cmp #20
+    bcs @done
+    inc tax_rate
+    jmp pause_refresh
+@spd:
+    lda speed
+    cmp #3
+    bcs @done
+    inc speed
+    jmp pause_refresh
+@done:
+    rts
+
+pause_adjust_dn:
+    lda menu_sel
+    beq @tax
+    cmp #1
+    beq @spd
+    lda #0
+    sta disaster_on
+    jmp pause_refresh
+@tax:
+    lda tax_rate
+    beq @done
+    dec tax_rate
+    jmp pause_refresh
+@spd:
+    lda speed
+    beq @done
+    dec speed
+    jmp pause_refresh
+@done:
+    rts
+
+; requeue the adjusted row (rows 7/9/11 relative -> menu_sel)
+pause_refresh:
+    lda menu_sel
+    asl a
+    clc
+    adc #7
+    sta trans_row       ; borrow as row index for build
+    jsr pause_row_build
+    lda #38
+    jsr vq_room
+    bcs :+
+    rts
+:   jsr nt_base_hi_calc
+    lda trans_row
+    clc
+    adc #4
+    sta t2
+    lda #0
+    sta t3
+    lda t2
+    asl a
+    rol t3
+    asl a
+    rol t3
+    asl a
+    rol t3
+    asl a
+    rol t3
+    asl a
+    rol t3
+    sta t1
+    lda t3
+    clc
+    adc nt_base_hi
+    sta t0
+    lda #32
+    jsr vq_hdr
+    ldy #0
+: lda row_buf,y
+    sta vq,x
+    inx
+    iny
+    cpy #32
+    bne :-
+    jmp vq_end
+
+pause_oam:
+    ; selection arrow next to the adjustable rows
+    ldx #0
+    lda menu_sel
+    asl a
+    asl a
+    asl a
+    asl a               ; sel*16
+    clc
+    adc #(4+7)*8-1
+    sta oam
+    lda #S_CURSOR
+    sta oam+1
+    lda #0
+    sta oam+2
+    lda #24
+    sta oam+3
+    ldx #4
+    jmp build_oam_menu_hidden_from4
+
+pause_draw_step:
+    lda trans_row
+    cmp #26
+    bcs @attrs
+    jsr pause_row_build
+    lda #38
+    jsr vq_room
+    bcs :+
+    rts
+:   jsr nt_base_hi_calc
+    lda trans_row
+    clc
+    adc #4
+    sta t2
+    lda #0
+    sta t3
+    lda t2
+    asl a
+    rol t3
+    asl a
+    rol t3
+    asl a
+    rol t3
+    asl a
+    rol t3
+    asl a
+    rol t3
+    sta t1
+    lda t3
+    clc
+    adc nt_base_hi
+    sta t0
+    lda #32
+    jsr vq_hdr
+    ldy #0
+: lda row_buf,y
+    sta vq,x
+    inx
+    iny
+    cpy #32
+    bne :-
+    jsr vq_end
+    inc trans_row
+    rts
+@attrs:
+    lda #59
+    jsr vq_room
+    bcs :+
+    rts
+:   jsr nt_base_hi_calc
+    lda nt_base_hi
+    clc
+    adc #$03
+    sta t0
+    lda #$C8
+    sta t1
+    lda #56
+    jsr vq_hdr
+    lda #%10101010
+    ldy #56
+: sta vq,x
+    inx
+    dey
+    bne :-
+    jsr vq_end
+    lda draw_target
+    sta draw_nt
+    lda ppuctrl_sh
+    and #%11111100
+    ora draw_nt
+    sta ppuctrl_sh
+    lda #1
+    sta state_sub
+    rts
+
+; write string at ptr0 into row_buf at offset X ($FF-terminated)
+rb_text:
+    ldy #0
+: lda (ptr0),y
+    cmp #$FF
+    beq :+
+    sta row_buf,x
+    inx
+    iny
+    bne :-
+:   rts
+
+; write 16-bit t2/t3 into row_buf at X, 5 digits, leading spaces
+rb_num16:
+    txa
+    pha
+    jsr bin16_to_cost
+    pla
+    tax
+    ldy #1
+: lda cost_tmp,y
+    clc
+    adc #1
+    sta row_buf,x
+    inx
+    iny
+    cpy #6
+    bne :-
+    ; leading zero suppression (keep the last digit)
+    txa
+    sec
+    sbc #5
+    tax
+    ldy #4
+: lda row_buf,x
+    cmp #1
+    bne :+
+    lda #' '
+    sta row_buf,x
+    inx
+    dey
+    bne :-
+:   rts
+
+; build one 32-tile row of the report screen (row index in trans_row)
+pause_row_build:
+    ldy #0
+    lda #' '
+: sta row_buf,y
+    iny
+    cpy #32
+    bne :-
+    lda trans_row
+    cmp #1
+    bne :+
+    jmp prb_title
+:   cmp #3
+    bne :+
+    jmp prb_funds
+:   cmp #4
+    bne :+
+    jmp prb_pop
+:   cmp #7
+    bne :+
+    jmp prb_tax
+:   cmp #9
+    bne :+
+    jmp prb_speed
+:   cmp #11
+    bne :+
+    jmp prb_disaster
+:   cmp #14
+    bne :+
+    jmp prb_res
+:   cmp #15
+    bne :+
+    jmp prb_com
+:   cmp #16
+    bne :+
+    jmp prb_ind
+:   cmp #18
+    bne :+
+    jmp prb_infra
+:   cmp #20
+    bne :+
+    jmp prb_approval
+:   cmp #23
+    bne :+
+    jmp prb_hint
+:   rts
+
+prb_title:
+    ldx #10
+    ldy #<str_report
+    lda #>str_report
+    jsr set_ptr0
+    jmp rb_text
+prb_funds:
+    ldx #6
+    ldy #<str_funds
+    lda #>str_funds
+    jsr set_ptr0
+    jsr rb_text
+    ; money digits at col 17
+    lda #'$'
+    sta row_buf+17
+    ldx #0
+    ldy #0
+: lda money,y
+    clc
+    adc #1
+    sta row_buf+18,x
+    inx
+    iny
+    cpy #6
+    bne :-
+    ; suppress leading zeros
+    ldx #0
+: lda row_buf+18,x
+    cmp #1
+    bne :+
+    lda #' '
+    sta row_buf+18,x
+    inx
+    cpx #5
+    bne :-
+:   rts
+prb_pop:
+    ldx #6
+    ldy #<str_popl
+    lda #>str_popl
+    jsr set_ptr0
+    jsr rb_text
+    jsr calc_pop
+    ldx #18
+    jmp rb_num16
+prb_tax:
+    ldx #6
+    ldy #<str_tax
+    lda #>str_tax
+    jsr set_ptr0
+    jsr rb_text
+    lda tax_rate
+    sta t2
+    lda #0
+    sta t3
+    ldx #18
+    jsr rb_num16
+    lda #'%'
+    sta row_buf+23
+    rts
+prb_speed:
+    ldx #6
+    ldy #<str_speed
+    lda #>str_speed
+    jsr set_ptr0
+    jsr rb_text
+    lda speed
+    asl a
+    asl a
+    asl a
+    tay
+    ldx #18
+: lda speed_names,y
+    cmp #$FF
+    beq :+
+    sta row_buf,x
+    inx
+    iny
+    bne :-
+:   rts
+prb_disaster:
+    ldx #6
+    ldy #<str_disas
+    lda #>str_disas
+    jsr set_ptr0
+    jsr rb_text
+    lda disaster_on
+    beq @off
+    ldy #<str_on
+    lda #>str_on
+    bne @w
+@off:
+    ldy #<str_off
+    lda #>str_off
+@w: jsr set_ptr0
+    ldx #18
+    jmp rb_text
+prb_res:
+    ldx #6
+    ldy #<str_res
+    lda #>str_res
+    jsr set_ptr0
+    jsr rb_text
+    lda res_pop
+    sta t2
+    lda res_pop+1
+    sta t3
+    ldx #12
+    jsr rb_num16
+    ldx #20
+    ldy #<str_zones
+    lda #>str_zones
+    jsr set_ptr0
+    jsr rb_text
+    lda res_zones
+    sta t2
+    lda #0
+    sta t3
+    ldx #26
+    jmp rb_num16
+prb_com:
+    ldx #6
+    ldy #<str_com
+    lda #>str_com
+    jsr set_ptr0
+    jsr rb_text
+    lda com_pop
+    sta t2
+    lda com_pop+1
+    sta t3
+    ldx #12
+    jsr rb_num16
+    ldx #20
+    ldy #<str_zones
+    lda #>str_zones
+    jsr set_ptr0
+    jsr rb_text
+    lda com_zones
+    sta t2
+    lda #0
+    sta t3
+    ldx #26
+    jmp rb_num16
+prb_ind:
+    ldx #6
+    ldy #<str_ind
+    lda #>str_ind
+    jsr set_ptr0
+    jsr rb_text
+    lda ind_pop
+    sta t2
+    lda ind_pop+1
+    sta t3
+    ldx #12
+    jsr rb_num16
+    ldx #20
+    ldy #<str_zones
+    lda #>str_zones
+    jsr set_ptr0
+    jsr rb_text
+    lda ind_zones
+    sta t2
+    lda #0
+    sta t3
+    ldx #26
+    jmp rb_num16
+prb_infra:
+    ldx #6
+    ldy #<str_roads
+    lda #>str_roads
+    jsr set_ptr0
+    jsr rb_text
+    lda roads_n
+    sta t2
+    lda roads_n+1
+    sta t3
+    ldx #12
+    jsr rb_num16
+    ldx #20
+    ldy #<str_plants
+    lda #>str_plants
+    jsr set_ptr0
+    jsr rb_text
+    lda plant_n
+    sta t2
+    lda #0
+    sta t3
+    ldx #26
+    jmp rb_num16
+prb_approval:
+    ldx #6
+    ldy #<str_approval
+    lda #>str_approval
+    jsr set_ptr0
+    jsr rb_text
+    jsr calc_approval
+    sta t2
+    lda #0
+    sta t3
+    ldx #18
+    jsr rb_num16
+    lda #'%'
+    sta row_buf+23
+    rts
+prb_hint:
+    ldx #6
+    ldy #<str_hint
+    lda #>str_hint
+    jsr set_ptr0
+    jmp rb_text
+
+; approval 0-99: powered ratio, services, disasters
+calc_approval:
+    lda #50
+    jsr acc_set
+    lda powered_n
+    lsr a
+    jsr acc_add
+    lda unpowered_n
+    asl a
+    jsr acc_sub
+    lda police_n
+    asl a
+    jsr acc_add
+    lda firestn_n
+    asl a
+    jsr acc_add
+    lda fire_n
+    asl a
+    asl a
+    jsr acc_sub
+    lda tax_rate
+    jsr acc_sub
+    lda has_flags       ; amenities please citizens
+    and #1
+    beq :+
+    lda #5
+    jsr acc_add
+:   jsr acc_clamp100
+    ora #0              ; refresh N/Z from the value itself
+    bmi @zero
+    cmp #100
+    bcc @ok
+    lda #99
+    rts
+@zero:
+    lda #0
+@ok:
+    rts
+
+str_report:   .byte "CITY REPORT",$FF
+str_funds:    .byte "FUNDS",$FF
+str_popl:     .byte "POPULATION",$FF
+str_tax:      .byte "TAX RATE",$FF
+str_speed:    .byte "SIM SPEED",$FF
+str_disas:    .byte "DISASTERS",$FF
+str_on:       .byte "ON ",$FF
+str_off:      .byte "OFF",$FF
+str_res:      .byte "RES",$FF
+str_com:      .byte "COM",$FF
+str_ind:      .byte "IND",$FF
+str_zones:    .byte "ZONES",$FF
+str_roads:    .byte "ROADS",$FF
+str_plants:   .byte "PLANTS",$FF
+str_approval: .byte "APPROVAL",$FF
+str_hint:     .byte "START - BACK TO CITY",$FF
+
+speed_names:
+    .byte "PAUSED",$FF,$00
+    .byte "SLOW  ",$FF,$00
+    .byte "NORMAL",$FF,$00
+    .byte "FAST  ",$FF,$00
