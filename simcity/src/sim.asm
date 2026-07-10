@@ -463,6 +463,7 @@ scan_init:
     sta scan_police
     sta scan_flags
     sta scan_boltn
+    sta scan_nuke_f
     rts
 
 ; ---- one map cell
@@ -732,7 +733,16 @@ scan_center:
     jmp scan_next
 @plant:
     inc scan_plant
-    ; seed the power flood fill with this cell's index
+    lda t4
+    cmp #6              ; nuke?
+    bne :+
+    lda #1
+    sta scan_nuke_f
+    lda sim_cx
+    sta scan_nuke_x
+    lda sim_cy
+    sta scan_nuke_y
+:   ; seed the power flood fill with this cell's index
     lda sim_cy
     and #3
     tax
@@ -1100,6 +1110,12 @@ pass_end:
     sta unpowered_n
     lda scan_fire
     sta fire_n
+    lda scan_nuke_f
+    sta nuke_present
+    lda scan_nuke_x
+    sta nuke_x
+    lda scan_nuke_y
+    sta nuke_y
     ; bolts
     lda scan_boltn
     sta bolt_n
@@ -1131,6 +1147,7 @@ pass_end:
 ; ---------------------------------------------------------------- month ----
 month_tick:
     jsr calc_demand
+    jsr disaster_roll
     jsr pick_message
     ; advance date
     inc month
@@ -1439,6 +1456,141 @@ inc_year:               ; BCD year in year (hi) / year+1 (lo)
     sta year
     ; (no century adjust needed before year 9999)
 @ok:
+    rts
+
+; ------------------------------------------------------------- disasters ---
+disaster_roll:
+    lda disaster_on
+    beq @no
+    jsr rand_step
+    cmp #16             ; ~1 in 16 months
+    bcs @no
+    jsr rand_step
+    cmp #24
+    bcc @meltdown
+    cmp #112
+    bcc @tornado
+    ; random fire at a random cell
+    jsr rand_step
+    and #$3F
+    sta cell_x
+    jsr rand_step
+    ldy #MAPH
+    jsr mod_y
+    sta cell_y
+    jsr fire_ignite
+@no:
+    rts
+@tornado:
+    lda torn_active
+    bne @no
+    lda #1
+    sta torn_active
+    jsr rand_step
+    and #$3F
+    sta torn_x
+    jsr rand_step
+    ldy #MAPH
+    jsr mod_y
+    sta torn_y
+    lda #56             ; ~15 seconds
+    sta torn_timer
+    lda #MSG_TORNADO
+    jmp show_msg
+@meltdown:
+    lda nuke_present
+    beq @tornado        ; no nuke: tornado instead
+    lda nuke_x
+    sta cell_x
+    lda nuke_y
+    sta cell_y
+    jsr rubble_3x3
+    jsr redraw_3x3
+    ; fires on the corners
+    dec cell_x
+    dec cell_y
+    lda #C_FIRE
+    jsr set_cell
+    jsr queue_cell
+    inc cell_x
+    inc cell_x
+    inc cell_y
+    inc cell_y
+    lda #C_FIRE
+    jsr set_cell
+    jsr queue_cell
+    dec cell_x
+    dec cell_y
+    lda #MSG_MELTDOWN
+    jmp show_msg
+
+; tornado wander/destroy: called every frame during play
+tornado_tick:
+    lda torn_active
+    beq @done
+    lda frame_ctr
+    and #$0F
+    bne @done           ; act every 16 frames
+    dec torn_timer
+    bne :+
+    lda #0
+    sta torn_active
+    rts
+:   ; wander
+    jsr rand_step
+    and #3
+    tax
+    lda torn_x
+    clc
+    adc walk4_dx,x
+    cmp #MAPW
+    bcs :+
+    sta torn_x
+:   jsr rand_step
+    and #3
+    tax
+    lda torn_y
+    clc
+    adc walk4_dy,x
+    cmp #MAPH
+    bcs :+
+    sta torn_y
+:   ; destroy what's underneath
+    lda torn_x
+    sta cell_x
+    lda torn_y
+    sta cell_y
+    jsr get_cell
+    beq @done           ; dirt: nothing
+    cmp #C_WATER
+    beq @done
+    cmp #C_RUBBLE
+    beq @done
+    cmp #C_FIRE
+    beq @done
+    cmp #$10
+    bcc @simple
+    ; zone: level the whole thing
+    and #$0F
+    tax
+    lda cell_x
+    clc
+    adc center_dx,x
+    sta cell_x
+    lda cell_y
+    clc
+    adc center_dy,x
+    sta cell_y
+    jsr rubble_3x3
+    jsr redraw_3x3
+    rts
+@simple:
+    lda #C_RUBBLE
+    jsr set_cell
+    lda #0
+    sta (ptr1),y
+    jsr queue_cell_neighbors
+@done:
     rts
 
 ; ---------------------------------------------------------------- taxes ----

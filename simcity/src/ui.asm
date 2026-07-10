@@ -1164,6 +1164,7 @@ play_frame:
     jsr cursor_move
     jsr play_buttons
     jsr sim_slice
+    jsr tornado_tick
     jsr status_update
     jsr build_oam
     rts
@@ -1476,11 +1477,72 @@ build_oam:
     iny
     bne @bolt
 @hide_rest:
+    ; tornado (16x16, 2 animation frames)
+    lda torn_active
+    beq @no_torn
+    lda torn_x
+    sec
+    sbc vp_x
+    cmp #VIEW_W
+    bcs @no_torn
+    asl a
+    asl a
+    asl a
+    asl a
+    sta t0
+    lda torn_y
+    sec
+    sbc vp_y
+    cmp #VIEW_H
+    bcs @no_torn
+    asl a
+    asl a
+    asl a
+    asl a
+    clc
+    adc #32
+    sta t1
+    ; tile base: alternate A/B every 8 frames
+    lda frame_ctr
+    and #%00001000
+    beq :+
+    lda #S_TORN_B0
+    bne :++
+:   lda #S_TORN_A0
+:   sta t2
+    ldy #0
+@tq: lda t1
+    clc
+    adc torn_qy,y
+    sec
+    sbc #1
+    sta oam,x
+    inx
+    tya
+    clc
+    adc t2
+    sta oam,x
+    inx
+    lda #%00000010      ; palette 2 (grays)
+    sta oam,x
+    inx
+    lda t0
+    clc
+    adc torn_qx,y
+    sta oam,x
+    inx
+    iny
+    cpy #4
+    bne @tq
+@no_torn:
     lda #$FF
 : sta oam,x
     inx
     bne :-
     rts
+
+torn_qx: .byte 0,8,0,8      ; sprite quadrant offsets (TL,TR,BL,BR)
+torn_qy: .byte 0,0,8,8
 
 ; ---------------------------------------------------------------- strings --
 str_title:    .byte "M I C R O P O L I S",$FF

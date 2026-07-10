@@ -210,6 +210,16 @@ tmp_col:     .res 1
 disaster_on: .res 1
 fire_n:      .res 1     ; active fires (from last pass)
 new_city:    .res 1
+torn_active: .res 1
+torn_x:      .res 1
+torn_y:      .res 1
+torn_timer:  .res 1     ; lifetime in 16-frame steps
+scan_nuke_x: .res 1
+scan_nuke_y: .res 1
+scan_nuke_f: .res 1
+nuke_x:      .res 1
+nuke_y:      .res 1
+nuke_present: .res 1
 
 ; ---------------------------------------------------------------- WRAM -----
 .segment "WRAM"
