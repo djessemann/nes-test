@@ -1644,6 +1644,7 @@ menu_frame:
     lda menu_sel
     beq :+
     dec menu_sel
+    jsr sfx_click
 :   lda joy_rep
     and #BTN_DOWN
     beq :+
@@ -1651,6 +1652,7 @@ menu_frame:
     cmp #NTOOLS-1
     bcs :+
     inc menu_sel
+    jsr sfx_click
 :   lda joy_press
     and #BTN_A
     beq :+

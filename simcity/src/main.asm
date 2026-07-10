@@ -298,6 +298,7 @@ reset:
     bne :-
 
     jsr rng_init
+    jsr apu_init
     jsr title_enter
 
 main_loop:
@@ -389,7 +390,7 @@ vq_done:
     lda ppumask_sh
     sta PPUMASK
 
-    jsr sfx_tick
+    jsr audio_tick
 
     lda #1
     sta nmi_ready
@@ -705,14 +706,11 @@ ppu_text:
     bne :-
 :   rts
 
-; ---------------------------------------------------------------- sfx stub -
-sfx_tick:
-    rts
-
 ; ---------------------------------------------------------------- includes -
 .include "map.asm"
 .include "ui.asm"
 .include "sim.asm"
+.include "sound.asm"
 
 ; ---------------------------------------------------------------- data -----
 .segment "RODATA"

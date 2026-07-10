@@ -641,6 +641,7 @@ fire_ignite:
     jsr queue_cell
     lda scan_fire
     bne @no             ; only message on fresh outbreak
+    jsr sfx_alarm
     lda #MSG_FIRE
     jsr show_msg
 @no:
@@ -1495,6 +1496,7 @@ disaster_roll:
     sta torn_y
     lda #56             ; ~15 seconds
     sta torn_timer
+    jsr sfx_alarm
     lda #MSG_TORNADO
     jmp show_msg
 @meltdown:
@@ -1521,6 +1523,7 @@ disaster_roll:
     jsr queue_cell
     dec cell_x
     dec cell_y
+    jsr sfx_alarm
     lda #MSG_MELTDOWN
     jmp show_msg
 
@@ -1722,10 +1725,4 @@ bin16_to_cost:
     sta cost_tmp+5
     rts
 
-; sfx stubs (filled in later)
-sfx_place:
-    rts
-sfx_dozer:
-    rts
-sfx_error:
-    rts
+
