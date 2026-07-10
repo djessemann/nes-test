@@ -1350,7 +1350,7 @@ pick_message:
     lda res_pop+1
     bne @want_stad
     lda res_pop
-    cmp #40
+    cmp #20
     bcc :+
 @want_stad:
     jsr rand_step
@@ -1364,7 +1364,7 @@ pick_message:
     lda ind_pop+1
     bne @want_port
     lda ind_pop
-    cmp #35
+    cmp #12
     bcc :+
 @want_port:
     jsr rand_step
@@ -1378,7 +1378,7 @@ pick_message:
     lda com_pop+1
     bne @want_air
     lda com_pop
-    cmp #30
+    cmp #10
     bcc :+
 @want_air:
     jsr rand_step
@@ -1598,9 +1598,9 @@ tornado_tick:
 
 ; ---------------------------------------------------------------- taxes ----
 year_tick:
-    ; revenue = (pop/16) * tax_rate
+    ; revenue = (pop/8) * tax_rate
     jsr calc_pop        ; t2/t3 = displayed population
-    ldx #4
+    ldx #3
 : lsr t3
     ror t2
     dex
@@ -1631,8 +1631,7 @@ year_tick:
     lda t3
     adc t1
     sta t3
-    clc
-:   ; stations cost $100/year each (repeated add; station count is small)
+    ; stations cost $100/year each (repeated add; station count is small)
     lda police_n
     clc
     adc firestn_n

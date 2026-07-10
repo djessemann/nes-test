@@ -1,2 +1,4 @@
 *.o
 simcity/*.o
+simcity/labels.txt
+simcity/*.o

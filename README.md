@@ -1,3 +1,14 @@
+# NES Games
+
+Homebrew NES ROMs built from scratch in 6502 assembly.
+
+| Game | ROM | What it is |
+|------|-----|------------|
+| **[Micropolis](simcity/README.md)** | `simcity/micropolis.nes` | A faithful demake of the original SimCity: zones, power grid, RCI demand, taxes, disasters, battery saves |
+| **Void Runner** | `void-runner/voidrunner.nes` | A vertical shoot-em-up (below) |
+
+---
+
 # VOID RUNNER — NES ROM
 
 A vertical shoot-em-up built from scratch in 6502 assembly for the NES.

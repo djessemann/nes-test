@@ -94,14 +94,15 @@ title_enter:
     lda #$C0
     sta PPUADDR
     ldx #0
-: lda #%10101010      ; P2 everywhere
+@attr_loop:
+    lda #%10101010      ; P2 everywhere
     cpx #48
     bcc :+
     lda title_sky_attr-48,x
 :   sta PPUDATA
     inx
     cpx #64
-    bne :-
+    bne @attr_loop
     lda #ST_TITLE
     sta game_state
     lda #0
