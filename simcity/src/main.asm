@@ -48,6 +48,8 @@ C_RAIL    = $07
 C_WIRE    = $08
 C_ROADWIRE = $09
 C_RAILROAD = $0A
+C_WIRE_W  = $0B         ; power line over water
+C_RAIL_W  = $0C         ; rail trestle over water
 ; zone cells: $10+pos R, $20+pos C, $30+pos I, then buildings
 C_ZR      = $10
 C_ZC      = $20

@@ -139,6 +139,43 @@ def roadwire_cell(road_horiz):
         c.hline(0, 15, 7, '1'); c.hline(0, 15, 8, '1')
     return c.art()
 
+def water_wire_cell(horiz):
+    """Power line crossing water: dark pylon line on calm water.
+    Art is aligned so left/right (or top/bottom) tile quads dedup."""
+    c = C(fill='2')
+    if horiz:
+        c.hline(0, 15, 7, '1')
+        c.hline(0, 15, 8, '1')
+        for x in (3, 11):                 # pylons, aligned mod 8
+            c.vline(x, 5, 10, '1')
+            c.px(x, 5, '3')
+            c.px(x, 10, '3')
+    else:
+        c.vline(7, 0, 15, '1')
+        c.vline(8, 0, 15, '1')
+        for y in (3, 11):
+            c.hline(5, 10, y, '1')
+            c.px(5, y, '3')
+            c.px(10, y, '3')
+    return c.art()
+
+def water_rail_cell(horiz):
+    """Rail trestle bridge: dark causeway with light ties over calm water."""
+    c = C(fill='2')
+    if horiz:
+        c.rect(0, 5, 16, 6, fill='1')
+        c.hline(0, 15, 6, '3')
+        c.hline(0, 15, 9, '3')
+        for x in range(1, 16, 4):         # pilings, aligned mod 4
+            c.vline(x, 11, 12, '1')
+    else:
+        c.rect(5, 0, 6, 16, fill='1')
+        c.vline(6, 0, 15, '3')
+        c.vline(9, 0, 15, '3')
+        for y in range(1, 16, 4):
+            c.hline(11, 12, y, '1')
+    return c.art()
+
 def railroad_cross(road_horiz):
     # road with rail crossing it
     art = road_cell(E | W if road_horiz else N | S)
@@ -892,6 +929,10 @@ def build(BG, SPR, cells):
     cells.add('ROADWIRE_V', roadwire_cell(False), P_GRAY)
     cells.add('RAILROAD_H', railroad_cross(True), P_GRAY)
     cells.add('RAILROAD_V', railroad_cross(False), P_GRAY)
+    cells.add('WIREW_H', water_wire_cell(True), P_WATER)   # water crossings
+    cells.add('WIREW_V', water_wire_cell(False), P_WATER)
+    cells.add('RAILW_H', water_rail_cell(True), P_WATER)
+    cells.add('RAILW_V', water_rail_cell(False), P_WATER)
 
     # ---------------- zone periphery + signs
     for zname, pal, col in (('R', P_WARM, '2'), ('C', P_WATER, '2'), ('I', P_GRAY, '1')):

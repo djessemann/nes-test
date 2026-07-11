@@ -99,6 +99,8 @@ is_railish:
     beq @yes
     cmp #C_RAILROAD
     beq @yes
+    cmp #C_RAIL_W
+    beq @yes
     clc
     rts
 @yes:
@@ -109,6 +111,8 @@ is_wireish:
     cmp #C_WIRE
     beq @yes
     cmp #C_ROADWIRE
+    beq @yes
+    cmp #C_WIRE_W
     beq @yes
     clc
     rts
@@ -168,7 +172,13 @@ cell_gfx:
     beq @wire
     cmp #C_ROADWIRE
     beq @roadwire
-    ; railroad crossing
+    cmp #C_WIRE_W
+    bne :+
+    jmp @wire_w
+:   cmp #C_RAIL_W
+    bne :+
+    jmp @rail_w
+:   ; railroad crossing
     lda #<is_railish
     sta ptr2
     lda #>is_railish
@@ -178,17 +188,17 @@ cell_gfx:
     and #(1|4)          ; rail N/S -> rail vertical -> road horizontal
     beq :+
     lda #CG_RAILROAD_H
-    bne @have
+    jmp @have
 :   lda #CG_RAILROAD_V
-    bne @have
+    jmp @have
 @fire:
     lda frame_ctr
     and #%00010000
     beq :+
     lda #CG_FIRE_A
-    bne @have
+    jmp @have
 :   lda #CG_FIRE_B
-    bne @have
+    jmp @have
 @road:
     lda #<is_roadish
     sta ptr2
@@ -198,7 +208,7 @@ cell_gfx:
     lda #CG_ROAD
     clc
     adc t4
-    bne @have
+    jmp @have
 @rail:
     lda #<is_railish
     sta ptr2
@@ -208,7 +218,7 @@ cell_gfx:
     lda #CG_RAIL
     clc
     adc t4
-    bne @have
+    jmp @have
 @wire:
     lda #<is_wireish
     sta ptr2
@@ -218,7 +228,7 @@ cell_gfx:
     lda #CG_WIRE
     clc
     adc t4
-    bne @have
+    jmp @have
 @roadwire:
     lda #<is_roadish
     sta ptr2
@@ -229,8 +239,34 @@ cell_gfx:
     and #(1|4)          ; road N/S -> road vertical
     beq :+
     lda #CG_ROADWIRE_V
-    bne @have
+    jmp @have
 :   lda #CG_ROADWIRE_H
+    jmp @have
+@wire_w:
+    lda #<is_wireish
+    sta ptr2
+    lda #>is_wireish
+    sta ptr2+1
+    jsr net_mask
+    lda t4
+    and #(1|4)          ; wire N/S -> vertical crossing
+    beq :+
+    lda #CG_WIREW_V
+    jmp @have
+:   lda #CG_WIREW_H
+    jmp @have
+@rail_w:
+    lda #<is_railish
+    sta ptr2
+    lda #>is_railish
+    sta ptr2+1
+    jsr net_mask
+    lda t4
+    and #(1|4)
+    beq :+
+    lda #CG_RAILW_V
+    jmp @have
+:   lda #CG_RAILW_H
 @have:
     sta gfx_id
     tax
@@ -334,7 +370,8 @@ center_dy: .byte 1, 1,  1,  0, 0,  0, <-1, <-1, <-1
 small_gfx:
     .byte CG_DIRT, CG_TREES, CG_WATER, CG_RUBBLE, CG_PARK
     .byte $FF, $FF, $FF, $FF, $FF, $FF   ; fire, road, rail, wire, rw, rr
-    .byte 0,0,0,0,0
+    .byte $FF, $FF                       ; water wire, water rail
+    .byte 0,0,0
 
 blk_tab_lo:
     .byte <blk_POLICE, <blk_FIRESTN, <blk_COAL, <blk_NUKE

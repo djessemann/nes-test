@@ -109,18 +109,28 @@ tool_apply:
     lda t5
     cmp #C_ROAD
     beq @mk_roadwire
+    cmp #C_WATER
+    beq @mk_wire_w
     jmp err_cant
 :   cpx #TL_RAIL
     bne :+
     lda t5
     cmp #C_ROAD
     beq @mk_railroad
+    cmp #C_WATER
+    beq @mk_rail_w
 :   jmp err_cant
 @mk_roadwire:
     lda #C_ROADWIRE
     bne @place
 @mk_railroad:
     lda #C_RAILROAD
+    bne @place
+@mk_wire_w:
+    lda #C_WIRE_W
+    bne @place
+@mk_rail_w:
+    lda #C_RAIL_W
     bne @place
 @clear_ok:
     ldx tool_cur
@@ -150,11 +160,20 @@ bulldoze:
     beq bd_cant
     cmp #$10
     bcs bd_zone
-    ; simple tile
+    ; simple tile: water crossings revert to water, land to dirt
     jsr tool_pay
     bcs :+
     jmp err_funds
-:   lda #C_DIRT
+:   lda t5
+    cmp #C_WIRE_W
+    beq @to_water
+    cmp #C_RAIL_W
+    beq @to_water
+    lda #C_DIRT
+    bne @clr
+@to_water:
+    lda #C_WATER
+@clr:
     jsr set_cell
     lda #0
     sta (ptr1),y
@@ -491,6 +510,8 @@ scan_step:
     cmp #C_RAILROAD
     beq sc_railroad
     cmp #C_RAIL
+    beq sc_rail
+    cmp #C_RAIL_W
     beq sc_rail
     cmp #$10
     bcs sc_zone_cell
@@ -1062,6 +1083,8 @@ is_conductive:
     beq @yes
     cmp #C_RAILROAD
     beq @yes
+    cmp #C_WIRE_W
+    beq @yes
     clc
     rts
 @yes:
@@ -1530,10 +1553,13 @@ disaster_roll:
 ; tornado wander/destroy: called every frame during play
 tornado_tick:
     lda torn_active
-    beq @done
-    lda frame_ctr
+    bne :+
+    rts
+:   lda frame_ctr
     and #$0F
-    bne @done           ; act every 16 frames
+    beq :+
+    rts                 ; act every 16 frames
+:
     dec torn_timer
     bne :+
     lda #0
@@ -1588,7 +1614,15 @@ tornado_tick:
     jsr redraw_3x3
     rts
 @simple:
+    cmp #C_WIRE_W
+    beq @to_water
+    cmp #C_RAIL_W
+    beq @to_water
     lda #C_RUBBLE
+    bne @wreck
+@to_water:
+    lda #C_WATER
+@wreck:
     jsr set_cell
     lda #0
     sta (ptr1),y

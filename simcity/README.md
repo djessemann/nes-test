@@ -44,6 +44,9 @@ Everything works like the original:
 - **Roads** ($10) auto-connect, cross power lines and rails, and cost money
   yearly in maintenance. **Rail** ($20) is prettier and sturdier but costs
   more upkeep.
+- **Crossing water**: place the power-line or rail tool directly on a river
+  to build a pylon crossing or trestle bridge. Bulldozing one gives the
+  water back.
 - **RCI demand** (bars in the status bar) drives growth: jobs attract
   residents, residents feed commerce and industry, and high taxes scare
   everyone away.
