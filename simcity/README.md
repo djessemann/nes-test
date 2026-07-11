@@ -13,6 +13,9 @@ or burn.
 
 ## Play It
 
+There's a printable [instruction booklet](manual/micropolis_manual.pdf) with
+cover art built from the game's own tile graphics.
+
 Load `micropolis.nes` in any NES emulator (Mesen, FCEUX, Nestopia,
 RetroArch/QuickNES...). The cartridge is MMC1 with battery-backed save RAM:
 **your city is saved automatically** (yearly and whenever you open the city
