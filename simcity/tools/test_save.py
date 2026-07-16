@@ -43,8 +43,27 @@ def main():
         print("FAIL: map changed"); ok = False
     if drv2.map0(rx+2, ry+2) != 0x64:
         print("FAIL: coal plant missing after load"); ok = False
+    # liveness: the game must actually RUN after CONTINUE, not just load
+    f0 = drv2.zp('frame_ctr')
+    x0 = drv2.zp('cur_x')
+    drv2.tap(RIGHT)
+    drv2.frames(30)
+    if drv2.zp('frame_ctr') == f0:
+        print("FAIL: frame counter frozen after CONTINUE"); ok = False
+    if drv2.zp('cur_x') == x0:
+        print("FAIL: cursor unresponsive after CONTINUE"); ok = False
+    if drv2.zp('ppuctrl_sh') & 0x80 == 0:
+        print("FAIL: NMI disabled (ppuctrl_sh corrupted)"); ok = False
+    m0 = drv2.zp('month')
+    drv2.frames(400)
+    if drv2.zp('month') == m0:
+        print("FAIL: simulation not advancing after CONTINUE"); ok = False
     if ok:
-        print(f"SAVE/CONTINUE OK (money={drv2.money()}, plant intact)")
+        print(f"SAVE/CONTINUE OK (money={drv2.money()}, plant intact, "
+              f"sim alive, cursor responsive)")
+    else:
+        import sys
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

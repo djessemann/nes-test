@@ -587,6 +587,19 @@ game_screen_enter:
     bne :-
     ; clamp viewport
     jsr clamp_vp
+    ; reset all transient sim state (critical for CONTINUE: the scan
+    ; pointers must be re-aimed at the map before the first sim slice)
+    lda #0
+    sta sim_phase
+    sta sim_cycles
+    sta pw_head
+    sta pw_tail
+    sta pend_head
+    sta pend_tail
+    sta torn_active
+    sta grew_flag
+    jsr scan_init
+    jsr tool_size_upd
     ; draw status bar to both NTs
     jsr status_full_draw
     ; draw viewport to NT0
